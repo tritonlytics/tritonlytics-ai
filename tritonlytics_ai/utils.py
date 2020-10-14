@@ -5,7 +5,7 @@ __all__ = ['in_notebook', 'convert_to_snakecase', 'RAW_DATA_PATH', 'CLEAN_DATA_P
            'STANDARD_THEME_META_PATH', 'SUMMARIZATION_PATH', 'ADHOC_THEME_PATH', 'TASK_LM_DTYPES', 'TASK_LM_DTYPES_SC',
            'TASK_SENTIMENT_DTYPES', 'TASK_STANDARD_THEME_CSS_DTYPES', 'TASK_STANDARD_THEME_SAW_DTYPES',
            'TASK_STANDARD_THEME_META_DTYPES', 'date_cols', 'SENT_LABELS', 'STANDARD_THEME_CSS_LABELS',
-           'STANDARD_THEME_SAW_LABELS', 'STANDARD_THEME_META_LABELS', 'OptimalMultiThresholdMetrics',
+           'STANDARD_THEME_SAW_LABELS', 'STANDARD_THEME_META_LABELS', 'reverse_text', 'OptimalMultiThresholdMetrics',
            'OptimizeFBetaThreshCallback', 'pd_advanced_describe', 'pd_fillna_by_group', 'pd_add_by_regex',
            'APPOS_REGEX_REPL', 'EMOJI_STR_REPLS', 'SPELLING_REGEX_REPLS', 'WEIRDCHAR_STR_REPLS', 're_replace',
            'make_replacements', 'fix_ampm', 'fix_sentence_ends', 'fix_hyphenated_words', 're_repls', 'str_repls']
@@ -169,9 +169,12 @@ STANDARD_THEME_META_LABELS = list(TASK_STANDARD_THEME_META_DTYPES.keys())[-2:]
 # SENT_CLASSES = [['Very Negative', 'Negative', 'Neutral', 'Positive', 'VeryPositive'], ['no', 'yes']]
 
 # Cell
+def reverse_text(nums): return nums.flip(0)
+
+# Cell
 class OptimalMultiThresholdMetrics:
-    def __init__(self, beta=1, sigmoid=True, start=0.17, end=0.24, step=0.01, average='macro', sample_weight=None):
-        store_attr(self=self, names='beta, sigmoid, start, end, step, average, sample_weight')
+    def __init__(self, beta=1, sigmoid=True, start=0.17, end=0.24, step=0.01, average='macro', sample_weight=None, **kwargs):
+        store_attr(self=self, names='beta, sigmoid, start, end, step, average, sample_weight, kwargs')
         self.ths = np.arange(self.start, self.end, self.step)
 
     # returns the best threshold for a given f_beta
@@ -190,7 +193,7 @@ class OptimalMultiThresholdMetrics:
         return AccumMetric(f, sigmoid=self.sigmoid, to_np=True, invert_arg=False, flatten=False, **kwargs)
 
 
-    # methods to calculate the metrics based on preds/targs
+    # ===== methods to calculate the metrics based on preds/targs =====
 
     def opt_th(self, preds, targs, **kwargs):
         with warnings.catch_warnings():
@@ -221,10 +224,10 @@ class OptimalMultiThresholdMetrics:
             return accuracy_multi(torch.tensor(preds.astype(float)), torch.tensor(targs), thresh=th, sigmoid=False)
 
 
-    # private/utility
+    # ===== private/utility =====
 
     def _calc_fbetas(self, preds, targs):
-        return [ skm.fbeta_score(targs, (preds >= th), self.beta, average=self.average, sample_weight=self.sample_weight)
+        return [ skm.fbeta_score(targs, (preds >= th), self.beta, average=self.average, sample_weight=self.sample_weight, **self.kwargs)
                  for th in self.ths ]
 
 # Cell
@@ -233,7 +236,7 @@ class OptimizeFBetaThreshCallback(Callback):
                 update_metric_thresh=True, **kwargs):
         self.run_before = Recorder
 
-        store_attr(self=self, names='beta, average, sample_weight, start, end, step, update_metric_thresh')
+        store_attr(self=self, names='beta, average, sample_weight, start, end, step, update_metric_thresh, kwargs')
         self.do_setup = True
 
     def setup(self):
@@ -243,7 +246,7 @@ class OptimizeFBetaThreshCallback(Callback):
         self.learn.metrics = self.learn.metrics + L(ValueMetric(self.metric_value, 'opt_th'))
         self.do_setup = False
 
-    # callbacks
+    # ===== callbacks =====
 
     def before_fit(self): self.setup()
 
@@ -265,7 +268,7 @@ class OptimizeFBetaThreshCallback(Callback):
     def metric_value(self): return self.opt_thresh
 
 
-    # private/utility methods
+    # ===== private/utility methods =====
 
     def _opt_th(self):
         # get rid of TrackerCallbacks, Recorder, and self to get predictions
@@ -281,8 +284,11 @@ class OptimizeFBetaThreshCallback(Callback):
 
             ths = np.arange(self.start, self.end, self.step)
             idx = np.argmax([
-                skm.fbeta_score(targs, (probs >= th), self.beta,
-                                average=self.average, sample_weight=self.sample_weight)
+                skm.fbeta_score(targs, (probs >= th),
+                                self.beta,
+                                average=self.average,
+                                sample_weight=self.sample_weight,
+                                **self.kwargs)
                 for th in ths ])
 
             return ths[idx]
