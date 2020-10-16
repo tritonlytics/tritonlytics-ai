@@ -55,12 +55,14 @@ def get_sentiment_train_data(train_config={}, trg_labels=SENT_LABELS[1:]):
 
     train_df = pd.read_csv(config['train_data'])
     train_df.dropna(subset=config['corpus_cols'], inplace=True)
+    train_df.reset_index(drop=True, inplace=True)
     train_df['labels'] = train_df[trg_labels].apply(lambda x: ' '.join(x.index[x.astype(bool)]), axis=1)
     train_df['is_valid'] = False
 
     if ('valid_data' in config and config['valid_data'] is not None):
         valid_df = pd.read_csv(config['valid_data'])
         valid_df.dropna(subset=config['corpus_cols'], inplace=True)
+        valid_df.reset_index(drop=True, inplace=True)
         valid_df['labels'] = valid_df[trg_labels].apply(lambda x: ' '.join(x.index[x.astype(bool)]), axis=1)
         valid_df['is_valid'] = True
 
@@ -131,12 +133,14 @@ def get_saw_standard_theme_train_data(train_config={}, trg_labels=STANDARD_THEME
 
     train_df = pd.read_csv(config['train_data'])
     train_df.dropna(subset=config['corpus_cols'], inplace=True)
+    train_df.reset_index(drop=True, inplace=True)
     train_df['labels'] = train_df[trg_labels].apply(lambda x: ' '.join(x.index[x.astype(bool)]), axis=1)
     train_df['is_valid'] = False
 
     if ('valid_data' in config and config['valid_data'] is not None):
         valid_df = pd.read_csv(config['valid_data'])
         valid_df.dropna(subset=config['corpus_cols'], inplace=True)
+        valid_df.reset_index(drop=True, inplace=True)
         valid_df['labels'] = valid_df[trg_labels].apply(lambda x: ' '.join(x.index[x.astype(bool)]), axis=1)
         valid_df['is_valid'] = True
 
@@ -208,12 +212,14 @@ def get_css_standard_theme_train_data(train_config={}, trg_labels=STANDARD_THEME
 
     train_df = pd.read_csv(config['train_data'])
     train_df.dropna(subset=config['corpus_cols'], inplace=True)
+    train_df.reset_index(drop=True, inplace=True)
     train_df['labels'] = train_df[trg_labels].apply(lambda x: ' '.join(x.index[x.astype(bool)]), axis=1)
     train_df['is_valid'] = False
 
     if ('valid_data' in config and config['valid_data'] is not None):
         valid_df = pd.read_csv(config['valid_data'])
         valid_df.dropna(subset=config['corpus_cols'], inplace=True)
+        valid_df.reset_index(drop=True, inplace=True)
         valid_df['labels'] = valid_df[trg_labels].apply(lambda x: ' '.join(x.index[x.astype(bool)]), axis=1)
         valid_df['is_valid'] = True
 
@@ -285,11 +291,13 @@ def get_meta_standard_theme_train_data(train_config={}):
 
     train_df = pd.read_csv(config['train_data'])
     train_df.dropna(subset=config['corpus_cols'], inplace=True)
+    train_df.reset_index(drop=True, inplace=True)
     train_df['is_valid'] = False
 
     if ('valid_data' in config and config['valid_data'] is not None):
         valid_df = pd.read_csv(config['valid_data'])
         valid_df.dropna(subset=config['corpus_cols'], inplace=True)
+        valid_df.reset_index(drop=True, inplace=True)
         valid_df['is_valid'] = True
 
         return pd.concat([train_df, valid_df])

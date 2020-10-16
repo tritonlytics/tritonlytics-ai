@@ -3,7 +3,7 @@
 __all__ = ['get_metrics', 'get_loss_func', 'get_cbs', 'get_learner', 'train', 'get_sentiment_preds']
 
 # Cell
-import os, datetime
+import os, datetime, gc
 import sklearn.metrics as skm
 
 from fastai.text.all import *
@@ -137,7 +137,7 @@ def train(hf_arch, hf_config, hf_tokenizer, hf_model, train_config={}):
     # save scores from validation set
     yyyymmdd = datetime.today().strftime("%Y%m%d")
 
-    with open(f"{config['learner_path']}/{yyyymmdd}_model_scores{m_suf}.pkl", 'wb') as f:
+    with open(f"{config['learner_path']}/{m_pre}model_scores{m_suf}.pkl", 'wb') as f:
         pickle.dump(scores, f)
 
     # save train/validation probs, targs, losses for review
@@ -149,24 +149,30 @@ def train(hf_arch, hf_config, hf_tokenizer, hf_model, train_config={}):
     losses_df = pd.DataFrame(losses.numpy(), columns=['loss'])
     final_df = pd.concat([df.reset_index(), probs_df, targs_df, losses_df], axis=1)
 
-    final_df.to_csv(f"{config['learner_path']}/{yyyymmdd}_model_preds{m_suf}.csv", index=False)
+    final_df.to_csv(f"{config['learner_path']}/{yyyymmdd}_train_results{m_suf}.csv", index=False)
 
     return scores, final_df
 
 # Cell
-def get_sentiment_preds(inf_df, learner_export_path=None, device=torch.device('cpu'), train_config={}):
+def get_sentiment_preds(inf_df, learner_export_path=None, model_scores_path=None,
+                        device=torch.device('cpu'), train_config={}):
+
     config = {**sentiment_train_config, **train_config}
     m_pre, m_suf = config['m_pre'], config['m_suf']
 
     # 1. grab learner, procs, and data
     cpu = device.type == 'cpu'
     if (learner_export_path is None): learner_export_path = f"{config['learner_path']}/{config['export_filename']}"
+    if (model_scores_path is None): model_scores_path = f"{config['learner_path']}/{m_pre}model_scores{m_suf}.pkl"
 
     inf_learn = load_learner(fname=learner_export_path, cpu=cpu)
     inf_learn.model = inf_learn.model.to(device)
     inf_learn.model = inf_learn.model.eval()
 
     # 2. define a suitable dataloader
+    inf_df = inf_df.copy()
+    inf_df.dropna(subset=config['corpus_cols'], inplace=True)
+    inf_df.reset_index(drop=True, inplace=True)
     inf_dl = inf_learn.dls.test_dl(inf_df, rm_type_tfms=None, bs=16)
 
     # 3. get probs and document vectors
@@ -188,7 +194,31 @@ def get_sentiment_preds(inf_df, learner_export_path=None, device=torch.device('c
     # test_dl.get_idxs() => unsorted/original order items
     all_probs = all_probs[0][np.argsort(inf_dl.get_idxs())]
 
-    # 5. return ordered results
+    # 5. return results with scores in a df, probs, and labels
+    with open(model_scores_path, 'rb') as f: training_results = pickle.load(f)
+
+    prob_labels = ['prob_' + lbl for lbl in  SENT_LABELS[1:]]
+    probs_df = pd.DataFrame(all_probs.numpy(), columns=prob_labels)
+
+    final_df = pd.concat([inf_df, probs_df], axis=1)
+
+    for lbl in  SENT_LABELS[1:]:
+        final_df[f'pred_{lbl}'] = (final_df[f'prob_{lbl}'] > training_results['f1']['threshold']).astype(np.int64)
+
+    final_df['valid_loss'] = training_results['valid_loss']
+    final_df['accuracy_multi'] = training_results['accuracy_multi']
+    final_df['fbeta_score'] = training_results['fbeta_score']
+    final_df['precision_score'] = training_results['precision_score']
+    final_df['recall_score'] = training_results['recall_score']
+    final_df['roc_auc_score'] = training_results['roc_auc_score']
+    final_df['opt_th'] = training_results['opt_th']
+    final_df['f05_threshold'] = training_results['f05']['threshold']
+    final_df['f05_score'] = training_results['f05']['score']
+    final_df['f1_threshold'] = training_results['f1']['threshold']
+    final_df['f1_score'] = training_results['f1']['score']
+    final_df['f2_threshold'] = training_results['f2']['threshold']
+    final_df['f2_score'] = training_results['f2']['score']
+
     inf_learn, inf_dl = None, None; gc.collect()
 
-    return all_probs
+    return final_df, all_probs, SENT_LABELS[1:]
