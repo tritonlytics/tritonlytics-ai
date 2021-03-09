@@ -6,10 +6,10 @@ __all__ = ['set_seed', 'TL_RAND_SEED', 'in_notebook', 'convert_to_snakecase', 'R
            'TASK_LM_DTYPES', 'TASK_LM_DTYPES_SC', 'TASK_SENTIMENT_DTYPES', 'TASK_STANDARD_THEME_CSS_DTYPES',
            'TASK_STANDARD_THEME_SAW_DTYPES', 'TASK_STANDARD_THEME_META_DTYPES', 'date_cols', 'SENT_LABELS',
            'STANDARD_THEME_CSS_LABELS', 'STANDARD_THEME_SAW_LABELS', 'STANDARD_THEME_META_LABELS', 'reverse_text',
-           'OptimalMultiThresholdMetrics', 'OptimizeFBetaThreshCallback', 'pd_advanced_describe', 'pd_fillna_by_group',
-           'pd_add_by_regex', 'APPOS_REGEX_REPL', 'EMOJI_STR_REPLS', 'SPELLING_REGEX_REPLS', 'WEIRDCHAR_STR_REPLS',
-           're_replace', 'make_replacements', 'fix_ampm', 'fix_sentence_ends', 'fix_hyphenated_words', 're_repls',
-           'str_repls']
+           'OptimalMultiThresholdMetrics', 'OptimizeFBetaThreshCallback', 'FastAIPruningCallbackv2',
+           'pd_advanced_describe', 'pd_fillna_by_group', 'pd_add_by_regex', 'APPOS_REGEX_REPL', 'EMOJI_STR_REPLS',
+           'SPELLING_REGEX_REPLS', 'WEIRDCHAR_STR_REPLS', 're_replace', 'make_replacements', 'fix_ampm',
+           'fix_sentence_ends', 'fix_hyphenated_words', 're_repls', 'str_repls']
 
 # Cell
 import warnings
@@ -17,6 +17,8 @@ from inspect import signature
 import sklearn.metrics as skm
 
 from fastai.text.all import *
+
+import optuna
 
 # Cell
 TL_RAND_SEED = 9
@@ -316,6 +318,23 @@ class OptimizeFBetaThreshCallback(Callback):
                 for th in ths ])
 
             return ths[idx]
+
+# Cell
+class FastAIPruningCallbackv2(TrackerCallback):
+    def __init__(self, trial, monitor='valid_loss', **kwargs) -> None:
+        super().__init__(monitor=monitor, **kwargs)
+        self._trial = trial
+
+    def after_epoch(self) -> None:
+        super().after_epoch()
+
+        value = self.recorder.values[-1][self.idx]
+        if value is None: return
+
+        self._trial.report(float(value), step=self.epoch)
+        if self._trial.should_prune():
+            message = "Trial was pruned at epoch {}.".format(self.epoch)
+            raise optuna.TrialPruned(message)
 
 # Cell
 def pd_advanced_describe(df, include='all'):
